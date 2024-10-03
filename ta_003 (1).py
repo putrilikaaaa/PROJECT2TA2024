@@ -10,6 +10,8 @@ from scipy.spatial.distance import squareform
 import geopandas as gpd
 from streamlit_option_menu import option_menu
 from sklearn.preprocessing import StandardScaler
+import folium
+from streamlit_folium import folium_static  # Make sure to import folium_static
 
 # Function to upload CSV files
 def upload_csv_file():
@@ -150,10 +152,14 @@ def pemetaan(data_df):
         else:
             cluster_labels = cluster_labels_dict[optimal_n_clusters - 0.1]  # For K-Medoids
 
-        clustered_data = pd.DataFrame({
-            'Province': data_daily.columns,
-            'Cluster': cluster_labels
-        })
+        # Ensure lengths match
+        if len(data_daily.columns) == len(cluster_labels):
+            clustered_data = pd.DataFrame({
+                'Province': data_daily.columns,
+                'Cluster': cluster_labels
+            })
+        else:
+            st.error("Panjang data provinsi dan label kluster tidak cocok.")
 
         # Display cluster table
         st.subheader("Tabel Provinsi per Cluster")
@@ -189,43 +195,39 @@ def pemetaan(data_df):
                 0: 'red',
                 1: 'yellow',
                 2: 'green',
-                3: 'blue',
-                4: 'purple',
-                5: 'orange',
-                6: 'pink',
-                7: 'brown',
-                8: 'cyan',
-                9: 'magenta'
+                # Add more colors as needed
             })
-            gdf['color'].fillna('grey', inplace=True)
 
-            # Display provinces colored grey
-            grey_provinces = gdf[gdf['color'] == 'grey']['Province'].tolist()
-            if grey_provinces:
-                st.subheader("Provinsi yang Tidak Termasuk dalam Kluster:")
-                st.write(grey_provinces)
+            # Create Folium map
+            map_center = [-2.5, 118.5]  # Center of Indonesia
+            m = folium.Map(location=map_center, zoom_start=5)
 
-            # Create folium map for clusters
-            st.subheader("Peta Klustering Provinsi")
-            m = folium.Map(location=[-5.5, 120], zoom_start=5)
+            # Add clusters to the map
+            for _, row in gdf.iterrows():
+                folium.GeoJson(
+                    row.geometry,
+                    style_function=lambda x, color=row['color']: {'fillColor': color, 'color': 'black', 'weight': 1, 'fillOpacity': 0.5},
+                ).add_to(m)
 
-            # Add GeoJSON to the map
-            folium.GeoJson(gdf).add_to(m)
-            folium.LayerControl().add_to(m)
-
-            # Display the map in Streamlit
             folium_static(m)
 
-# Sidebar navigation
-with st.sidebar:
-    selected = option_menu("Menu", ["Statistika Deskriptif", "Pemetaan"], 
-                           icons=["bar-chart", "map"], menu_icon="cast", default_index=0)
+# Main Application
+def main():
+    st.title("Aplikasi Analisis Data Harga")
 
-# Load data
-data_df = upload_csv_file()
+    # Sidebar menu
+    with st.sidebar:
+        selected_page = option_menu("Menu", ["Statistika Deskriptif", "Pemetaan"], 
+                                     icons=["bar-chart", "map"], 
+                                     menu_icon="cast", default_index=0)
 
-# Display pages based on selection
-if selected == "Statistika Deskriptif":
-    statistika_deskriptif(data_df)
-elif selected == "Pemetaan":
-    pemetaan(data_df)
+    # File upload
+    data_df = upload_csv_file()
+
+    if selected_page == "Statistika Deskriptif":
+        statistika_deskriptif(data_df)
+    elif selected_page == "Pemetaan":
+        pemetaan(data_df)
+
+if __name__ == "__main__":
+    main()
